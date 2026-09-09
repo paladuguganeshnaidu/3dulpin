@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: #f5f7fa;
+}
+
+.cesium-viewer-bottom {
+  display: none !important;
+}
+
+.btn {
+  @apply inline-flex items-center gap-1 rounded px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50;
+}
+.btn-primary {
+  @apply btn bg-ulpin-navy text-white hover:bg-ulpin-blue;
+}
+.btn-ghost {
+  @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+}
+.btn-teal {
+  @apply btn bg-emerald-600 text-white hover:bg-emerald-700;
+}
