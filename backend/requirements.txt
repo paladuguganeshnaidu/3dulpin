@@ -1,0 +1,14 @@
+# India 3D ULPIN - backend runtime requirements
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic==2.13.5
+pydantic-settings==2.15.0
+SQLAlchemy==2.0.52
+PyJWT==2.13.0
+python-multipart==0.0.32
+httpx==0.28.1
+shapely==2.1.2
+
+# --- Development / tests ---
+pytest==9.1.1
+# ruff==0.12.0  # optional linter

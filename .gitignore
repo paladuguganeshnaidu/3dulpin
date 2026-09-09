@@ -1,0 +1,47 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.log
+
+# ---- Env / secrets ----
+.env
+.env.local
+*.pem
+*.key
+
+# ---- Node ----
+node_modules/
+dist/
+dist-ssr/
+*.local
+.eslintcache
+
+# ---- Frontend build ----
+frontend/dist/
+
+# ---- Uploads / runtime data ----
+data/uploads/*
+!data/uploads/.gitkeep
+backend/data/uploads/*
+!backend/data/uploads/.gitkeep
+backend/data/*.db
+*.db
+*.sqlite3
+*.geojson.tmp
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Docs scratch ----
+*.tmp

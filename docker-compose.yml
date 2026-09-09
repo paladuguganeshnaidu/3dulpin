@@ -1,0 +1,54 @@
+# India 3D ULPIN — local stack (PostgreSQL + PostGIS, API, Frontend)
+# Usage:
+#   docker compose up --build
+# Then open http://localhost:5173  (API docs at http://localhost:8000/docs)
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: 3dulpin
+      POSTGRES_PASSWORD: 3dulpin
+      POSTGRES_DB: 3dulpin
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U 3dulpin"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg://3dulpin:3dulpin@db:5432/3dulpin
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-local-dev-only-secret-change-me}
+      CORS_ORIGINS: http://localhost:5173
+      SEED_DEMO_DATA: "true"
+      SEED_DEMO_USERS: "true"
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-anthropic/claude-3.5-sonnet}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/data/uploads
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE: http://localhost:8000/api/v1
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  uploads:
