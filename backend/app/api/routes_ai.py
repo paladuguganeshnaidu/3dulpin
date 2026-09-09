@@ -165,6 +165,41 @@ def list_models(user=Depends(get_current_user)):
     return {"models": registry()}
 
 
+@router.post("/building-footprint")
+def building_footprint(
+    payload: dict,
+    user=Depends(require_roles(Role.SURVEYOR, Role.ADMIN)),
+):
+    """ML-assisted building block placement.
+
+    Accepts a rough polygon (``points``) such as the parcel border or clicked
+    corners, or an ``image_base64`` orthophoto when the building model is
+    enabled. Returns an orthogonal, border-fitted candidate footprint with a
+    method + confidence. Always ``requires_verification``.
+    """
+    from ..ml.building import extract_building_footprint
+
+    points = payload.get("points") or payload.get("footprint_points")
+    image_b64 = payload.get("image_base64")
+    image_bytes = None
+    if image_b64:
+        import base64
+
+        try:
+            image_bytes = base64.b64decode(image_b64)
+        except Exception:
+            raise HTTPException(422, "image_base64 could not be decoded.")
+    try:
+        result = extract_building_footprint(image_bytes=image_bytes, points=points)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    return {
+        **result,
+        "disclaimer": "AI-derived candidate. Verify against street view before use.",
+    }
+
+
+
 @router.post("/analyse")
 def ai_analyse(
     payload: dict | None = None,

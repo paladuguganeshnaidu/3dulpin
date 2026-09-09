@@ -9,6 +9,7 @@ from ..core.enums import AuditAction, PropertyStatus, Role
 from ..db.models import (
     AiPrediction,
     AuditLog,
+    OwnershipRecord,
     Parcel,
     Property,
     Submission,
@@ -16,6 +17,7 @@ from ..db.models import (
     ValidationResult,
 )
 from ..db.session import get_db
+from ..services import rooms as rooms_service
 from ..services.audit import audit
 from ..services.catalog import (
     create_property,
@@ -124,28 +126,94 @@ def create_surveyor_property(
         if parent is None:
             raise HTTPException(404, f"Parent '{payload['parent_id']}' not found.")
 
+    # footprint may be full GeoJSON or a raw ring of [lon, lat] points
+    footprint_data = payload.get("footprint_geojson")
+    if footprint_data is None and payload.get("footprint_points"):
+        footprint_data = {
+            "type": "Polygon",
+            "coordinates": [payload["footprint_points"]],
+        }
+    if footprint_data is None:
+        raise HTTPException(422, "footprint_geojson or footprint_points is required.")
+
+    assisted = bool(payload.get("assisted") or payload.get("ai_derived"))
+    source_type = SourceType.AI_DERIVED if assisted else SourceType.SURVEY_UPLOADED
+    status = PropertyStatus.PENDING_VERIFICATION if assisted else PropertyStatus.DRAFT
+
     ref_key = f"usr-{user.id}-{ptype.value}-{abs(hash(str(payload))) % 10**7}"
     try:
         prop = create_property(
             db,
             ref_key=ref_key,
             property_type=ptype,
-            footprint_data=payload["footprint_geojson"],
+            footprint_data=footprint_data,
             zmin=payload.get("zmin"),
             zmax=payload.get("zmax"),
             parcel=parcel,
             parent=parent,
             name=payload.get("name") or ref_key,
-            status=PropertyStatus.DRAFT,
-            source_type=SourceType.SURVEY_UPLOADED,
+            status=status,
+            source_type=source_type,
             source_name=user.email,
+            model_name=payload.get("model_name") if assisted else None,
+            model_version=payload.get("model_version") if assisted else None,
+            confidence=payload.get("confidence") if assisted else None,
             actor_id=user.id,
         )
     except Exception as exc:
         raise HTTPException(422, str(exc))
+
+    # optional ownership attached at creation time
+    owners = payload.get("owners") or []
+    for spec in owners:
+        try:
+            rooms_service.add_owner(
+                db, prop,
+                owner_name=str(spec["owner_name"]),
+                share_pct=float(spec.get("share_pct", 100.0)),
+                document_ref=str(spec.get("document_ref", "")),
+                verified=bool(spec.get("verified", False)),
+                commit=False,
+            )
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(422, f"Invalid owner: {exc}")
+
+    # auto-generate floors under a building when requested
+    floor_count = payload.get("floors")
+    floor_height = float(payload.get("floor_height", 3.0))
+    created_floors: list[Property] = []
+    if ptype == PropertyType.BUILDING and isinstance(floor_count, int) and floor_count > 0:
+        import json as _json
+
+        bfp = _json.loads(prop.footprint_geojson)
+        for i in range(floor_count):
+            z0 = round(i * floor_height, 3)
+            z1 = round(z0 + floor_height, 3)
+            fref = f"{ref_key}-F{i + 1:02d}"
+            created_floors.append(
+                create_property(
+                    db,
+                    ref_key=fref,
+                    property_type=PropertyType.FLOOR,
+                    footprint_data=bfp,
+                    zmin=z0,
+                    zmax=z1,
+                    parcel=parcel,
+                    parent=prop,
+                    name=f"{prop.name} Floor {i + 1}",
+                    status=PropertyStatus.DRAFT,
+                    source_type=SourceType.SURVEY_UPLOADED,
+                    source_name=user.email,
+                    actor_id=user.id,
+                )
+            )
+
     db.commit()
     result = run_validation(db, parcel_ref=parcel.ref_id, persist=True)
-    return {"property": property_to_dict(prop), "validation": result["summary"]}
+    out = {"property": property_to_dict(prop), "validation": result["summary"]}
+    if created_floors:
+        out["floors_created"] = [property_to_dict(f) for f in created_floors]
+    return out
 
 
 @router.post("/workflow/properties/{ref_key}/verify")
@@ -204,6 +272,113 @@ def my_submissions(db: Session = Depends(get_db), user=Depends(get_current_user)
         out.append({"submission_id": s.id, "status": s.status, "note": s.review_note,
                     "created_at": s.created_at.isoformat(), "property": property_to_dict(p) if p else None})
     return {"items": out, "total": len(out)}
+
+
+# ---------------------------------------------------------------------------
+# Room division + ownership (flexible addition)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/workflow/properties/{ref_key}/divide", status_code=201)
+def divide_floor(
+    ref_key: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(Role.SURVEYOR, Role.ADMIN)),
+):
+    """Divide a floor into rooms (units) with optional owners."""
+    floor = db.execute(select(Property).where(Property.ref_key == ref_key)).scalar_one_or_none()
+    if floor is None:
+        raise HTTPException(404, "Floor not found.")
+    rooms = payload.get("rooms") or []
+    try:
+        units = rooms_service.divide_floor_into_rooms(db, floor, rooms=rooms, actor=user)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    return {
+        "floor": property_to_dict(floor),
+        "created": [property_to_dict(u) for u in units],
+        "created_count": len(units),
+    }
+
+
+@router.get("/workflow/properties/{ref_key}/owners")
+def get_owners(
+    ref_key: str,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    prop = db.execute(select(Property).where(Property.ref_key == ref_key)).scalar_one_or_none()
+    if prop is None:
+        raise HTTPException(404, "Property not found.")
+    items = rooms_service.list_owners(db, prop)
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/workflow/properties/{ref_key}/owners", status_code=201)
+def add_owner(
+    ref_key: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(Role.SURVEYOR, Role.ADMIN)),
+):
+    prop = db.execute(select(Property).where(Property.ref_key == ref_key)).scalar_one_or_none()
+    if prop is None:
+        raise HTTPException(404, "Property not found.")
+    try:
+        row = rooms_service.add_owner(
+            db, prop,
+            owner_name=str(payload.get("owner_name", "")),
+            share_pct=float(payload.get("share_pct", 100.0)),
+            document_ref=str(payload.get("document_ref", "")),
+            verified=bool(payload.get("verified", False)),
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    audit(db, "geometry_modify", user_id=user.id, target_type="owner", target_id=str(row.id),
+          detail={"property": ref_key})
+    return {"owner": rooms_service.owner_to_dict(row)}
+
+
+@router.put("/workflow/owners/{owner_id}")
+def update_owner(
+    owner_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(Role.SURVEYOR, Role.ADMIN)),
+):
+    owner = db.get(OwnershipRecord, owner_id)
+    if owner is None:
+        raise HTTPException(404, "Owner record not found.")
+    try:
+        row = rooms_service.update_owner(
+            db, owner,
+            owner_name=payload.get("owner_name"),
+            share_pct=payload.get("share_pct"),
+            document_ref=payload.get("document_ref"),
+            verified=payload.get("verified"),
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    audit(db, "geometry_modify", user_id=user.id, target_type="owner", target_id=str(owner_id),
+          detail={"updated": True})
+    return {"owner": rooms_service.owner_to_dict(row)}
+
+
+@router.delete("/workflow/owners/{owner_id}")
+def delete_owner(
+    owner_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(Role.SURVEYOR, Role.ADMIN)),
+):
+    owner = db.get(OwnershipRecord, owner_id)
+    if owner is None:
+        raise HTTPException(404, "Owner record not found.")
+    db.delete(owner)
+    audit(db, "geometry_modify", user_id=user.id, target_type="owner", target_id=str(owner_id),
+          detail={"deleted": True})
+    db.commit()
+    return {"deleted": owner_id}
 
 
 # ---------------------------------------------------------------------------
