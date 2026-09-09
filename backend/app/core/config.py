@@ -40,6 +40,7 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    cors_origin_host: str = ""
 
     # Uploads
     max_upload_mb: int = 50
@@ -62,7 +63,14 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        origins = [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        if self.cors_origin_host.strip():
+            host = self.cors_origin_host.strip()
+            if not host.startswith(("http://", "https://")):
+                host = "https://" + host
+            if host not in origins:
+                origins.append(host.rstrip("/"))
+        return origins
 
     @property
     def is_production(self) -> bool:

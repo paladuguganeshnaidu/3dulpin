@@ -416,6 +416,7 @@ def auto_place_building(
         "floors_created": [property_to_dict(f) for f in created_floors],
         "validation": result["summary"],
         "notice": "AI-derived block — requires surveyor verification.",
+        "created": True,
     }
 
 

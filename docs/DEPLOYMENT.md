@@ -33,12 +33,12 @@ and static frontend. In Render:
 
 1. Open **New → Blueprint**, connect the GitHub repository, and apply the
   blueprint. Render creates `3dulpin-api`, `3dulpin-web`, and `3dulpin-db`.
-2. On `3dulpin-api`, set `CORS_ORIGINS` to the frontend URL after Render
-  creates it, for example `https://3dulpin-web.onrender.com`.
-3. On `3dulpin-web`, set `VITE_API_BASE` to the API URL plus `/api/v1`, for
-  example `https://3dulpin-api.onrender.com/api/v1`, then redeploy the web
-  service. Vite variables are embedded during the build, so this step is
-  required after changing the value.
+2. The Blueprint automatically wires the Render API hostname into
+  `VITE_API_HOST` and the frontend hostname into `CORS_ORIGIN_HOST`.
+3. If your Render workspace does not resolve Blueprint service references,
+  set these manually: API `CORS_ORIGINS=https://YOUR-WEB.onrender.com` and
+  frontend `VITE_API_BASE=https://YOUR-API.onrender.com/api/v1`, then redeploy
+  the web service. Vite variables are embedded during the build.
 4. Check `https://3dulpin-api.onrender.com/health` and
   `/health/db`. The API creates its schema and, because the Blueprint sets
   `SEED_DEMO_DATA=true`, seeds the synthetic Bengaluru demo dataset on its
