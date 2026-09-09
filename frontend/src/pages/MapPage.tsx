@@ -36,6 +36,7 @@ export default function MapPage() {
   const [analysis, setAnalysis] = useState<AiAnalysis | null>(null);
   const [notice, setNotice] = useState("");
   const [placing, setPlacing] = useState(false);
+  const [ctx, setCtx] = useState<{ lon: number; lat: number } | null>(null);
 
   const conflictIds = useMemo(
     () => new Set(conflicts.flatMap((c) => c.object_ids)),
@@ -158,6 +159,38 @@ export default function MapPage() {
     }
   }
 
+  async function autoPlaceAt(lon: number, lat: number) {
+    setCtx(null);
+    setPlacing(true);
+    setNotice("");
+    try {
+      const res = await api<any>("/workflow/buildings/auto-place", {
+        method: "POST",
+        body: { center_lon: lon, center_lat: lat },
+      });
+      // fly to and select the newly mapped block so it renders in full 3D
+      setRegion({
+        id: "placed:" + res.building.id,
+        name: res.building.name,
+        kind: "pilot",
+        center: res.building.centroid,
+        description: res.building.parcel_id || "",
+      });
+      await handlePick("property", res.building.id);
+      setNotice(
+        `ML mapped a ${res.floors_created?.length || 0}-floor block here (${Math.round(
+          (res.candidate?.confidence || 0) * 100
+        )}% confidence). Click it to design floors & rooms.`
+      );
+      await load();
+      await loadConflicts();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "ML block mapping failed");
+    } finally {
+      setPlacing(false);
+    }
+  }
+
   async function handleSearch(q: string) {
     try {
       const res = await api<{ results: { kind: string; item: any }[]; total: number }>(
@@ -208,6 +241,7 @@ export default function MapPage() {
           region={region}
           revision={revision}
           onPick={handlePick}
+          onContext={(pos) => setCtx(pos)}
         />
 
         {/* Left layer panel */}
@@ -320,9 +354,12 @@ export default function MapPage() {
               )}
             </div>
             {selP && selP.property_type === "building" && (
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-col gap-2">
                 <button className="btn-teal !py-1 text-xs" onClick={() => setExplode((x) => !x)}>
                   {explode ? "Collapse floors" : "Explode floors"}
+                </button>
+                <button className="btn-ghost w-full !py-1 text-xs" onClick={() => nav("/surveyor")}>
+                  Open designer (floors · rooms · owners)
                 </button>
               </div>
             )}
@@ -336,6 +373,31 @@ export default function MapPage() {
                 Open full report
               </button>
             )}
+          </div>
+        )}
+
+        {/* Context menu (right click -> ML block mapping) */}
+        {ctx && (
+          <div className="absolute left-1/2 top-1/2 z-20 w-64 -translate-x-1/2 -translate-y-1/2 rounded border border-slate-200 bg-white p-3 shadow-xl">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-slate-700">Place a building block</p>
+              <button className="text-slate-400 hover:text-slate-600" onClick={() => setCtx(null)}>
+                ✕
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">
+              {ctx.lat.toFixed(6)}, {ctx.lon.toFixed(6)}
+            </p>
+            <button
+              className="btn-teal mt-2 w-full justify-center !py-1.5 text-xs"
+              disabled={placing}
+              onClick={() => autoPlaceAt(ctx.lon, ctx.lat)}
+            >
+              {placing ? "Mapping with ML…" : "🧠 Map Block with ML"}
+            </button>
+            <p className="mt-1 text-[10px] leading-snug text-slate-400">
+              Detects the parcel, edge-fits the block with ML and stacks floors.
+            </p>
           </div>
         )}
 

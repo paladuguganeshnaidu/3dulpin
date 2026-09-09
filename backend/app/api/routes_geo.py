@@ -48,6 +48,13 @@ REGIONS = [
         "center": {"lon": 77.6402, "lat": 12.9098},
         "description": "Detailed 3D cadastral demo dataset — not an official land record.",
     },
+    {
+        "id": "nagarjuna-campus",
+        "name": "Nagarjuna College Campus (Synthetic)",
+        "kind": "pilot",
+        "center": {"lon": 77.6285, "lat": 12.9218},
+        "description": "Demo campus for right-click ML block mapping. Not an official land record.",
+    },
 ]
 
 

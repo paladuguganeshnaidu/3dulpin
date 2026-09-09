@@ -32,6 +32,56 @@ router = APIRouter(tags=["workflow"])
 
 
 # ---------------------------------------------------------------------------
+# Helpers for right-click ML block placement
+# ---------------------------------------------------------------------------
+
+
+def _find_nearest_parcel(db: Session, lon: float, lat: float, tol: float = 0.005):
+    """Nearest active parcel within `tol` degrees (~550 m) of a point."""
+    import math
+
+    rows = db.execute(select(Parcel).where(Parcel.active.is_(True))).scalars().all()
+    best, best_d = None, tol
+    for p in rows:
+        d = math.hypot(p.centroid_lon - lon, p.centroid_lat - lat)
+        if d < best_d:
+            best, best_d = p, d
+    return best
+
+
+def _create_click_parcel(db: Session, user, lon: float, lat: float):
+    """Create a synthetic survey parcel at a right-click point if none exists."""
+    import math
+
+    from ..services.catalog import create_parcel
+
+    w, h = 40.0, 30.0
+    dlat = h / 2.0 / 111_320.0
+    dlon = w / 2.0 / (111_320.0 * math.cos(math.radians(lat)))
+    ring = [
+        [lon - dlon, lat - dlat],
+        [lon + dlon, lat - dlat],
+        [lon + dlon, lat + dlat],
+        [lon - dlon, lat + dlat],
+        [lon - dlon, lat - dlat],
+    ]
+    ref = f"P-ML-{user.id}-{int(abs(lon) * 1e4)}-{int(abs(lat) * 1e4)}"
+    parcel = create_parcel(
+        db,
+        ref_id=ref,
+        footprint_data=ring,
+        state_code="KA",
+        district_code="BLR",
+        locality="Nagarjuna College Campus (Synthetic)",
+        source_type=SourceType.SURVEY_UPLOADED,
+        source_name=user.email,
+        status="approved",
+        actor_id=user.id,
+    )
+    return parcel, ref
+
+
+# ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
 
@@ -232,9 +282,22 @@ def auto_place_building(
     from ..ml.building import regularize_footprint
 
     parcel_ref = payload.get("parcel_id")
-    parcel = db.execute(select(Parcel).where(Parcel.ref_id == parcel_ref)).scalar_one_or_none()
+    center = (payload.get("center_lon"), payload.get("center_lat"))
+    parcel = None
+    if parcel_ref:
+        parcel = db.execute(select(Parcel).where(Parcel.ref_id == parcel_ref)).scalar_one_or_none()
+        if parcel is None:
+            raise HTTPException(404, f"Parcel '{parcel_ref}' not found.")
+    elif center[0] is not None and center[1] is not None:
+        # snap to the nearest existing parcel within ~550 m when available
+        nearest = _find_nearest_parcel(db, float(center[0]), float(center[1]), tol=0.005)
+        if nearest is not None:
+            parcel = nearest
+            parcel_ref = parcel.ref_id
+        else:
+            parcel, parcel_ref = _create_click_parcel(db, user, float(center[0]), float(center[1]))
     if parcel is None:
-        raise HTTPException(404, f"Parcel '{parcel_ref}' not found.")
+        raise HTTPException(422, "Provide parcel_id or center_lon/center_lat for block placement.")
 
     ring = _json.loads(parcel.footprint_geojson)["coordinates"][0]
     floors = int(payload.get("floors", 4))

@@ -26,6 +26,7 @@ interface Props {
   region: Region | null;
   revision: number;
   onPick: (kind: "parcel" | "property", id: string) => void;
+  onContext?: (pos: { lon: number; lat: number }) => void;
 }
 
 function ring2d(gj: { coordinates: number[][][] }): number[][] {
@@ -55,8 +56,10 @@ export default function CesiumMap(props: Props) {
   const viewerRef = useRef<any>(null);
   const handlersRef = useRef<{
     onPick: Props["onPick"];
-  }>({ onPick: props.onPick });
+    onContext: Props["onContext"];
+  }>({ onPick: props.onPick, onContext: props.onContext });
   handlersRef.current.onPick = props.onPick;
+  handlersRef.current.onContext = props.onContext;
 
   // ---- init once ----
   useEffect(() => {
@@ -101,6 +104,22 @@ export default function CesiumMap(props: Props) {
           }
         }
       }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+      handler.setInputAction((click: any) => {
+        const onContext = handlersRef.current.onContext;
+        if (!onContext) return;
+        // ground point under the right click
+        const cartesian = viewer.scene.pickPosition(click.position);
+        const pick = cartesian
+          ? cartesian
+          : viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
+        if (!pick) return;
+        const carto = Cesium.Cartographic.fromCartesian(pick);
+        onContext({
+          lon: Cesium.Math.toDegrees(carto.longitude),
+          lat: Cesium.Math.toDegrees(carto.latitude),
+        });
+      }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
       viewerRef.current = viewer;
     } catch (err) {
       // WebGL / Cesium unavailable -> fallback message stays visible

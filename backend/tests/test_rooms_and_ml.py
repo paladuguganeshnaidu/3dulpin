@@ -131,6 +131,21 @@ def test_auto_place_building_from_parcel(client, surveyor_headers):
     assert len(ring) == 5
 
 
+def test_auto_place_by_right_click_center(client, surveyor_headers):
+    """Right-click ML block mapping creates a parcel when none is near."""
+    r = client.post(
+        "/api/v1/workflow/buildings/auto-place",
+        headers=surveyor_headers,
+        json={"center_lon": 77.93, "center_lat": 13.02, "floors": 2, "floor_height": 3},
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["building"]["parcel_id"].startswith("P-ML-")
+    assert len(body["floors_created"]) == 2
+    # confirm the parcel now exists and carries the block
+    assert client.get(f"/api/v1/parcels/{body['building']['parcel_id']}", headers=surveyor_headers).status_code == 200
+
+
 # ---- API: divide floor into rooms + owners ----
 def test_divide_floor_and_owner_crud(client, surveyor_headers):
     floors = client.get("/api/v1/properties?property_type=floor&limit=5", headers=surveyor_headers).json()
