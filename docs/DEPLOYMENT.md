@@ -28,11 +28,19 @@ docker compose up --build
 
 ## Production
 
-- **Frontend**: `npm run build` → static `frontend/dist`; deploy to Vercel/
-  Netlify/any static host; set `VITE_API_BASE` to the backend origin during build.
-- **Backend**: `uvicorn app.main:app` behind a TLS proxy, or `docker build` the
-  `backend/` image. Render/Railway supported. Add PostGIS as a managed DB and
-  set `DATABASE_URL`.
+- **Frontend on Vercel**: import this GitHub repository, set the Vercel project
+  Root Directory to `frontend`, Framework Preset to `Vite`, Build Command to
+  `npm run build`, and Output Directory to `dist`. Set `VITE_API_BASE` to the
+  deployed backend URL plus `/api/v1`, for example
+  `https://your-api.onrender.com/api/v1`. `frontend/vercel.json` handles SPA
+  rewrites so direct visits to `/map` and `/property/:id` work.
+- **Backend**: Vercel is not the current backend target. Run FastAPI on
+  Render/Railway/Fly.io or a VM using `uvicorn app.main:app --host 0.0.0.0
+  --port $PORT`, and use a managed PostgreSQL + PostGIS database. Set its
+  `DATABASE_URL`, `JWT_SECRET_KEY`, `APP_ENV=production`, and
+  `CORS_ORIGINS=https://your-frontend.vercel.app`.
+- **Frontend elsewhere**: `npm run build` → static `frontend/dist`; deploy to
+  Netlify or any static host; set `VITE_API_BASE` to the backend origin during build.
 - **Database schema**: MVP uses `create_all` (via `scripts/seed.py`). For a
   PostGIS deployment, prefer migrations:
   ```bash

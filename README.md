@@ -293,10 +293,14 @@ See `docs/SECURITY.md`.
 
 ## 15. Deployment
 
-- **Frontend**: `npm run build` → static `dist/` (Vercel / Netlify / nginx/Docker).
-- **Backend**: `uvicorn app.main:app` on Render/Railway, or `docker build`.
-- **Database**: managed PostgreSQL+PostGIS.
-- Full docs: `docs/DEPLOYMENT.md`.
+- **Frontend on Vercel**: import the repo, set Root Directory to `frontend`,
+  Framework Preset to `Vite`, Build Command to `npm run build`, Output Directory
+  to `dist`, and add `VITE_API_BASE=https://YOUR-BACKEND/api/v1`. SPA rewrites
+  are included in `frontend/vercel.json`.
+- **Backend**: run `uvicorn app.main:app --host 0.0.0.0 --port $PORT` on
+  Render/Railway/Fly.io, or deploy the `backend/` Docker image. Add managed
+  PostgreSQL + PostGIS and set `CORS_ORIGINS` to the Vercel URL.
+- **Frontend elsewhere**: `npm run build` → static `dist/` (Netlify/nginx/Docker).
 
 ---
 
