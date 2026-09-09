@@ -22,6 +22,12 @@ class Base(DeclarativeBase):
 def _make_engine(db_url: str | None = None):
     settings = get_settings()
     url = db_url or settings.database_url
+    # Render provides postgresql:// (and some providers still emit postgres://).
+    # SQLAlchemy needs the psycopg driver selected explicitly in this project.
+    if url.startswith("postgres://"):
+        url = "postgresql+psycopg://" + url[len("postgres://") :]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://") :]
     connect_args: dict = {}
     if url.startswith("sqlite"):
         connect_args["check_same_thread"] = False

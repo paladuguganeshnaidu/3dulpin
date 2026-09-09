@@ -50,6 +50,8 @@ Render free services may sleep when idle. The PostgreSQL service must be
 available while the API starts. The application uses SQLAlchemy text/metrics
 storage and therefore works with Render PostgreSQL; native PostGIS columns can
 be added later using the Alembic scaffold.
+The app automatically converts Render's `postgresql://...` connection string
+to the installed `postgresql+psycopg://...` SQLAlchemy dialect.
 
 ## Production
 
