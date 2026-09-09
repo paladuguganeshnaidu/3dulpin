@@ -46,6 +46,17 @@ and static frontend. In Render:
 5. Open the frontend URL and use the development-only demo credentials from
   the README. Change or disable demo seeding before using real data.
 
+### Free-only deployment
+
+The Blueprint sets the API and Postgres database to the `free` plans; the
+static frontend is free by default. No credit card should be needed where
+Render free resources are available for your account. Free web services sleep
+when idle, so the first request after inactivity can take a little longer.
+Free Postgres availability, storage, expiry, and account limits are controlled
+by Render and can change; check the plan shown before confirming deployment.
+For a longer-lived zero-cost demo, use a free external Postgres provider such
+as Supabase or Neon and put its connection string in the API's `DATABASE_URL`.
+
 Render free services may sleep when idle. The PostgreSQL service must be
 available while the API starts. The application uses SQLAlchemy text/metrics
 storage and therefore works with Render PostgreSQL; native PostGIS columns can

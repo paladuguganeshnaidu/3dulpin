@@ -304,6 +304,10 @@ See `docs/SECURITY.md`.
   the API, PostgreSQL database, and static frontend together. Set the generated
   API URL in frontend `VITE_API_BASE`, then set the generated frontend URL in
   API `CORS_ORIGINS` and redeploy.
+- **Free-only**: `render.yaml` explicitly sets the API and database to `free`;
+  the static site is free by default. Render may limit or change free Postgres
+  availability, so verify the plan before confirming. Free web services sleep
+  when idle.
 - **Frontend elsewhere**: `npm run build` → static `dist/` (Netlify/nginx/Docker).
 
 ---
