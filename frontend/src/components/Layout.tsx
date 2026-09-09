@@ -3,15 +3,17 @@ import { useAuth } from "../lib/auth";
 
 const roleLinks: Record<string, { to: string; label: string }[]> = {
   admin: [
+    { to: "/community-3d", label: "3D Community" },
     { to: "/import", label: "Import" },
     { to: "/surveyor", label: "My Submissions" },
     { to: "/admin", label: "Admin" },
   ],
   surveyor: [
+    { to: "/community-3d", label: "3D Community" },
     { to: "/import", label: "Import" },
     { to: "/surveyor", label: "My Submissions" },
   ],
-  viewer: [],
+  viewer: [{ to: "/community-3d", label: "3D Community" }],
 };
 
 export default function Layout({

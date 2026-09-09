@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./lib/auth";
 import AdminPage from "./pages/AdminPage";
+import Community3DPage from "./pages/Community3DPage";
 import ImportPage from "./pages/ImportPage";
 import LoginPage from "./pages/LoginPage";
 import MapPage from "./pages/MapPage";
@@ -23,6 +24,14 @@ export default function App() {
         element={
           <RequireAuth>
             <MapPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/community-3d"
+        element={
+          <RequireAuth>
+            <Community3DPage />
           </RequireAuth>
         }
       />

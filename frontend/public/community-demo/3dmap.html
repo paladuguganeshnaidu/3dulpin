@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D Building Floor Assignment — CityJSON Viewer</title>
+<style>
+  :root{
+    --bg0:#0b1020; --bg1:#111a2e;
+    --panel:rgba(15,22,40,.82);
+    --line:rgba(148,180,255,.14); --line-strong:rgba(148,180,255,.32);
+    --text:#e6edf7; --muted:#8ea0bd;
+    --accent:#5ad0ff; --accent2:#8b7bff;
+    --ok:#3ddc97; --warn:#ffb454; --danger:#ff6b6b;
+    --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden}
+  body{font-family:"Segoe UI",Roboto,-apple-system,BlinkMacSystemFont,sans-serif;color:var(--text);
+       background:radial-gradient(1200px 700px at 20% 10%,#141d33 0%,var(--bg0) 55%,#070a14 100%)}
+  #app{position:fixed;inset:0}
+  canvas{display:block;cursor:grab}
+  canvas:active{cursor:grabbing}
+
+  #brand{position:absolute;top:16px;left:18px;z-index:20;display:flex;align-items:center;gap:12px;pointer-events:none}
+  #brand .logo{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+      background:linear-gradient(135deg,var(--accent),var(--accent2));
+      box-shadow:0 8px 22px rgba(90,208,255,.35);font-weight:800;color:#07101f;font-size:17px}
+  #brand .title h1{font-size:15px;font-weight:700}
+  #brand .title p{font-size:11.5px;color:var(--muted);margin-top:1px}
+  #brand .title p b{color:var(--accent);font-weight:600}
+
+  #controls{position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:35;
+      display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
+      -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+      padding:6px 8px;border-radius:13px;box-shadow:0 8px 30px rgba(0,0,0,.35);max-width:calc(100vw - 120px)}
+  #controls label{font-size:11px;color:var(--muted);padding-left:4px;white-space:nowrap}
+  select,.btn{appearance:none;-webkit-appearance:none;border:1px solid var(--line-strong);border-radius:9px;
+      background:rgba(10,16,30,.6);color:var(--text);padding:7px 11px;font-size:12.5px;cursor:pointer;outline:none;
+      transition:border-color .15s,background .15s;font-family:inherit}
+  select:hover,.btn:hover{border-color:var(--accent)}
+  .btn{font-weight:600;display:inline-block;text-align:center}
+  #upload-label{background:rgba(90,208,255,.1)}
+  #file-input{display:none}
+
+  #legend{position:absolute;bottom:18px;left:18px;z-index:20;font-size:11px;color:var(--muted);
+      background:var(--panel);border:1px solid var(--line);padding:9px 13px;border-radius:11px;line-height:1.9;
+      -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  #legend .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:7px;vertical-align:-1px}
+  #legend .k1 .sw{background:#d7dee6}
+  #legend .k2 .sw{background:#ffd27a}
+  #legend .k3 .sw{background:#5ad0ff}
+
+  #loading{position:absolute;left:50%;top:80px;transform:translateX(-50%);z-index:30;width:min(420px,82vw);
+      background:#0d1322;border:1px solid var(--line-strong);border-radius:13px;padding:12px 15px;
+      display:none;box-shadow:0 12px 45px rgba(0,0,0,.5)}
+  #loading .bar{height:6px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden}
+  #loading .bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));
+      transition:width .15s ease}
+  #loading #loading-text{display:block;margin-top:8px;font-size:11.5px;color:var(--muted)}
+
+  #card{position:absolute;top:16px;right:18px;z-index:25;width:min(410px,calc(100vw - 40px));
+      max-height:calc(100vh - 32px);overflow-y:auto;background:var(--panel);
+      border:1px solid var(--line-strong);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+      border-radius:16px;padding:16px;box-shadow:0 18px 60px rgba(0,0,0,.5);display:none}
+  #card::-webkit-scrollbar{width:8px}
+  #card::-webkit-scrollbar-thumb{background:rgba(148,180,255,.25);border-radius:8px}
+  #card .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  #card h2{font-size:13px;font-weight:700}
+  #card .close{background:none;border:none;color:var(--muted);font-size:17px;cursor:pointer;line-height:1}
+  #card .close:hover{color:var(--text)}
+  #card .pand{font-family:var(--mono);font-size:10.5px;color:var(--accent);word-break:break-all;margin:4px 0 12px}
+
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .stat{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:11px;padding:8px 11px}
+  .stat .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .stat .v{font-size:14px;font-weight:700;margin-top:2px}
+  .stat .v small{font-size:10px;font-weight:500;color:var(--muted)}
+
+  .chip{display:flex;align-items:center;gap:7px;font-size:11px;padding:6px 11px;border-radius:999px;
+      margin-top:11px;font-weight:600;line-height:1.4}
+  .chip.ok{background:rgba(61,220,151,.12);color:var(--ok);border:1px solid rgba(61,220,151,.35)}
+  .chip.warn{background:rgba(255,180,84,.12);color:var(--warn);border:1px solid rgba(255,180,84,.4)}
+  .chip.muted{background:rgba(255,255,255,.05);color:var(--muted);border:1px solid var(--line)}
+
+  .section-title{font-size:10.5px;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;
+      font-weight:700;margin:17px 0 8px;display:flex;align-items:center;gap:8px}
+  .section-title::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  .floor-count-row{display:flex;gap:8px;align-items:flex-end}
+  .floor-count-row label{flex:1;font-size:11px;color:var(--muted)}
+  .floor-count-row input{width:100%;margin-top:4px;background:rgba(8,12,24,.6);border:1px solid var(--line-strong);
+      color:var(--text);border-radius:9px;padding:8px 10px;font-size:13px;outline:none}
+  .floor-count-row input:focus{border-color:var(--accent)}
+  .apply-btn{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#06101f;
+      font-weight:700;font-size:12.5px;padding:9px 14px;border-radius:9px;cursor:pointer;white-space:nowrap}
+  .apply-btn:hover{filter:brightness(1.08)}
+
+  .floor-block{margin-top:10px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .floor-head{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.03);padding:7px 10px}
+  .floor-head .fname{font-weight:700;font-size:12.5px;font-family:var(--mono)}
+  .floor-head .base-code{flex:1;font-family:var(--mono);font-size:9.5px;color:var(--muted);overflow:hidden;
+      text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+  .icon-btn{background:none;border:1px solid var(--line-strong);color:var(--accent);border-radius:7px;
+      font-size:11px;padding:3px 8px;cursor:pointer;white-space:nowrap}
+  .icon-btn:hover{border-color:var(--accent)}
+  .floor-units{padding:7px 8px 9px;display:none}
+  .floor-block.open .floor-units{display:block}
+  .unit-row{display:grid;grid-template-columns:52px 64px 1fr 1fr 22px;gap:5px;align-items:center;margin-top:6px}
+  .unit-row select,.unit-row input{width:100%;background:rgba(8,12,24,.5);border:1px solid var(--line);
+      color:var(--text);border-radius:8px;padding:6px 7px;font-size:12px;outline:none;min-width:0}
+  .unit-row input:focus,.unit-row select:focus{border-color:var(--accent)}
+  .unit-row .del{background:none;border:none;color:var(--danger);cursor:pointer;font-size:15px;padding:0}
+  .unit-hint{font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .unit-hint code{font-family:var(--mono);color:var(--accent)}
+
+  .export-btn{width:100%;margin-top:15px;background:rgba(61,220,151,.12);border:1px solid rgba(61,220,151,.4);
+      color:var(--ok);border-radius:10px;padding:11px;font-weight:700;font-size:12.5px;cursor:pointer}
+  .export-btn:hover{background:rgba(61,220,151,.2)}
+
+  #hint{position:absolute;bottom:18px;right:18px;z-index:20;font-size:11px;color:var(--muted);text-align:right;
+      line-height:1.9;pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,.7)}
+  #hint b{color:var(--accent);font-weight:600}
+
+  #toast{position:absolute;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);z-index:40;
+      background:#0d1322;border:1px solid var(--line-strong);color:var(--text);padding:11px 17px;border-radius:11px;
+      font-size:12.5px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
+      box-shadow:0 10px 30px rgba(0,0,0,.45);max-width:80vw;text-align:center}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="brand">
+    <div class="logo">3D</div>
+    <div class="title">
+      <h1>3D Building Floor Assignment</h1>
+      <p>Volumetric cadastre · ULPIN-style floor &amp; unit IDs</p>
+    </div>
+  </div>
+
+  <div id="controls">
+    <label>Dataset</label>
+    <select id="dataset"></select>
+    <button id="btn-oblique" class="btn" title="Bing-Maps-style oblique aerial view">3D</button>
+    <button id="btn-top" class="btn" title="Straight-down top view">Top</button>
+    <label id="upload-label" class="btn">Open file…</label>
+    <input type="file" id="file-input" accept=".json,.cityjson">
+  </div>
+
+  <div id="loading"><div class="bar"><i id="loading-bar"></i></div><span id="loading-text">Loading…</span></div>
+
+  <div id="legend">
+    <div class="k1"><span class="sw"></span>Building volume (LOD 2.2)</div>
+    <div class="k2"><span class="sw"></span>Floor divider</div>
+    <div class="k3"><span class="sw"></span>Selected</div>
+  </div>
+
+  <div id="card">
+    <div class="card-head">
+      <h2>Building record</h2>
+      <button class="close" id="card-close" title="Close">✕</button>
+    </div>
+    <div class="pand" id="card-id">—</div>
+
+    <div class="stats">
+      <div class="stat"><div class="k">Measured height</div><div class="v" id="card-height">—</div></div>
+      <div class="stat"><div class="k">Footprint</div><div class="v" id="card-area">—</div></div>
+      <div class="stat"><div class="k">Approved floors</div><div class="v" id="card-approved">—</div></div>
+      <div class="stat"><div class="k">Model floors</div><div class="v" id="card-est">—</div></div>
+    </div>
+
+    <div id="card-chip"></div>
+
+    <div class="section-title">Floor division</div>
+    <div class="floor-count-row">
+      <label>Number of floors
+        <input type="number" id="floor-count" min="1" max="120" step="1" value="1">
+      </label>
+      <button class="apply-btn" id="apply-floors">Apply</button>
+    </div>
+    <div id="floor-editor"></div>
+
+    <button class="export-btn" id="download-data">⬇  Download assignments (JSON)</button>
+  </div>
+
+  <div id="hint"><b>Click</b> a building → assign floors &amp; units<br>Drag to rotate · Scroll to zoom · Right-drag to pan</div>
+  <div id="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/earcut@2.2.4/dist/earcut.min.js"></script>
+
+  <script>
+  'use strict';
+  /* ============================ 1. SCENE ============================ */
+  const app = document.getElementById('app');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color('#0b1020');
+
+  const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 120000);
+  camera.position.set(500, 700, 900);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  app.appendChild(renderer.domElement);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.maxPolarAngle = Math.PI * 0.49;
+  controls.minDistance = 2;
+
+  // Sky + atmosphere
+  const HORIZON = new THREE.Color(0x2e3f5e); // aerial-haze colour used for fog + horizon
+  let skyMesh = null, skyTex = null;
+  function makeSky(){
+    if(!skyTex){
+      const c=document.createElement('canvas'); c.width=32; c.height=512;
+      const ctx=c.getContext('2d'); const g=ctx.createLinearGradient(0,0,0,512);
+      g.addColorStop(0,'#0a1226'); g.addColorStop(0.45,'#16304f'); g.addColorStop(0.62,'#33507c');
+      g.addColorStop(0.72,'#4a6790'); g.addColorStop(1,'#8ba3c0');
+      ctx.fillStyle=g; ctx.fillRect(0,0,32,512);
+      skyTex=new THREE.CanvasTexture(c);
+      skyTex.mapping=THREE.EquirectangularReflectionMapping;
+    }
+    if(skyMesh){ scene.remove(skyMesh); skyMesh.geometry.dispose(); }
+    const geo=new THREE.SphereGeometry(1, 24, 16);
+    skyMesh=new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map:skyTex, side:THREE.BackSide, fog:false, depthWrite:false }));
+    skyMesh.scale.setScalar(1);
+    skyMesh.renderOrder=-10;
+    scene.add(skyMesh);
+  }
+  function setAtmosphere(radius){
+    if(!skyMesh) makeSky();
+    skyMesh.scale.setScalar(Math.max(10, radius*30));
+    scene.fog = new THREE.Fog(HORIZON.getHex(), Math.max(2, radius*0.7), Math.max(6, radius*2.6));
+  }
+
+  // Lighting — natural "sunny afternoon": warm sun, cool sky fill
+  const hemi = new THREE.HemisphereLight(0xbdd2f5, 0x30364a, 0.7);
+  scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xffe2b8, 1.5);
+  sun.position.set(0.6, 1, 0.35).normalize();
+  scene.add(sun);
+  const skyFill = new THREE.DirectionalLight(0x9db4e8, 0.5);
+  skyFill.position.set(-0.7, 0.6, -0.5).normalize();
+  scene.add(skyFill);
+  const bounce = new THREE.DirectionalLight(0x6b7fa8, 0.25);
+  bounce.position.set(0.3, -0.5, 0.6).normalize();
+  scene.add(bounce);
+
+  // Ground — radial gradient "ground plane" plus a subtle street-grid
+  let groundTex = null;
+  function groundTexture(){
+    if(!groundTex){
+      const c=document.createElement('canvas'); c.width=256; c.height=256;
+      const ctx=c.getContext('2d'); const g=ctx.createRadialGradient(128,128,10,128,128,128);
+      g.addColorStop(0,'#101a2e'); g.addColorStop(0.55,'#0d1524'); g.addColorStop(1,'#080d18');
+      ctx.fillStyle=g; ctx.fillRect(0,0,256,256);
+      groundTex=new THREE.CanvasTexture(c);
+    }
+    return groundTex;
+  }
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(80000, 80000),
+    new THREE.MeshStandardMaterial({ map:groundTexture(), color:0xffffff, roughness:1, metalness:0 })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -1.5;
+  scene.add(ground);
+
+  let grid = null;
+  function updateGrid(radius){
+    if(grid){ scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); }
+    const size = Math.max(40, Math.ceil((radius*2.4)/40)*40);
+    grid = new THREE.GridHelper(size, Math.max(1, Math.round(size/40)), 0x465a7c, 0x31435f);
+    grid.position.y = 0.02;
+    grid.material.transparent = true;
+    grid.material.opacity = 0.4;
+    scene.add(grid);
+  }
+
+  // Vertex-coloured materials: facade/roof colour lives in geometry 'color'
+  const buildingMat = new THREE.MeshStandardMaterial({ color:0xffffff, vertexColors:true, roughness:0.9, metalness:0.0, side:THREE.DoubleSide });
+  const highlightMat = new THREE.MeshStandardMaterial({ color:0xffffff, vertexColors:true, emissive:0x1d84a6, emissiveIntensity:0.45, roughness:0.6, metalness:0.0, side:THREE.DoubleSide });
+  const dividerMat = new THREE.LineBasicMaterial({ color:0xffd27a, transparent:true, opacity:0.95 });
+
+  // Facade / roof palettes (muted European street tones)
+  const PALETTES = [
+    { wall:[0xc2aa92,0xd3c2ac,0xb39a84], roof:[0x9a6a52,0x7e5240,0xb0694a] }, // red-brick
+    { wall:[0xd8d1c4,0xe0dacd,0xcbc3b2], roof:[0x6f7076,0x5d6068,0x7d7f88] }, // plaster / slate
+    { wall:[0xb3a795,0xc4b6a2,0xa39683], roof:[0x6b5a51,0x594b45,0x7d6a5f] }, // brown brick
+    { wall:[0xd6cab8,0xcdc0ae,0xded4c4], roof:[0x8f5f46,0x9c6a4e,0x7c5139] }, // sandstone / tile
+    { wall:[0xbebdc0,0xcccbcd,0xaaa9ad], roof:[0x585f68,0x4c535c,0x626a73] }  // grey stone
+  ];
+
+  // ---- View presets (Bing-Maps-style oblique aerial + top) ----
+  let sceneCenter=null, sceneRadius=1, viewDist=1;
+  const DEG=Math.PI/180;
+  function obliqueView(){
+    if(!sceneCenter) return;
+    const polar=(90-34)*DEG;          // eye ~34° above the horizon
+    const az=-24*DEG;                 // slight rotation so facades catch the sun
+    const dir=new THREE.Vector3(Math.sin(polar)*Math.sin(az), Math.cos(polar), Math.sin(polar)*Math.cos(az));
+    camera.position.copy(sceneCenter).addScaledVector(dir, viewDist);
+    focusTarget=sceneCenter.clone();
+    controls.target.copy(sceneCenter);
+    controls.update();
+  }
+  function topView(){
+    if(!sceneCenter) return;
+    camera.position.set(sceneCenter.x, sceneCenter.y+viewDist*1.0, sceneCenter.z+0.01);
+    focusTarget=sceneCenter.clone();
+    controls.target.copy(sceneCenter);
+    controls.update();
+  }
+
+  /* ============================ 2. STATE ============================ */
+  const buildingMeshes = [];
+  let selectedMesh = null;
+  let dividerGroup = null;
+  let focusTarget = null;
+  let sceneExtent = { min:null, max:null };
+  const FLOOR_M = 3.0;
+
+  /* ============================ 3. UI HELPERS ============================ */
+  const $ = id => document.getElementById(id);
+  const loadingEl = $('loading'), loadingBar = $('loading-bar'), loadingText = $('loading-text');
+  function setLoading(on, frac, text){
+    loadingEl.style.display = on ? 'block' : 'none';
+    loadingBar.style.width = Math.max(0, Math.min(1, frac))*100 + '%';
+    loadingText.textContent = text || '';
+  }
+  let toastTimer = null;
+  function toast(msg){
+    const el = $('toast'); el.textContent = msg; el.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(()=>el.classList.remove('show'), 4600);
+  }
+
+  /* ============================ 4. DATASETS ============================ */
+  const DATASETS = [
+    { label:'CityJSON tile · 9-356-364', file:'9-356-364.city.json' },
+    { label:'CityJSON tile · 9-572-508', file:'9-572-508.city.json' }
+  ];
+  const datasetSelect = $('dataset');
+  DATASETS.forEach((d,i)=>{ const o=document.createElement('option'); o.value=d.file; o.textContent=d.label; o.selected=i===0; datasetSelect.appendChild(o); });
+
+  async function loadDataset(file){
+    setLoading(true, 0.03, 'Downloading ' + file + ' …');
+    try{
+      const res = await fetch(file);
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      buildCity(data, file);
+    }catch(err){
+      setLoading(false,0,'');
+      toast('Could not load dataset: ' + err.message);
+      console.error(err);
+    }
+  }
+
+  /* ============================ 5. SCENE RESET ============================ */
+  function clearScene(){
+    buildingMeshes.forEach(m=>{ scene.remove(m); m.geometry.dispose(); });
+    buildingMeshes.length = 0;
+    if(selectedMesh){ selectedMesh.material = buildingMat; selectedMesh = null; }
+    removeOverlays();
+    focusTarget = null;
+    sceneExtent = { min:null, max:null };
+    $('card').style.display = 'none';
+  }
+  function removeOverlays(){
+    if(dividerGroup){ scene.remove(dividerGroup); dividerGroup.traverse(o=>{ if(o.geometry)o.geometry.dispose(); }); dividerGroup=null; }
+  }
+
+  /* ============================ 6. GEOMETRY HELPERS ============================ */
+  // Newell normal over an index ring using px/py/pz arrays
+  function newellNormal(ring){
+    let x=0,y=0,z=0;
+    for(let i=0;i<ring.length;i++){
+      const j=(i+1)%ring.length;
+      const ai=ring[i], bi=ring[j];
+      x += (py[ai]-py[bi])*(pz[ai]+pz[bi]);
+      y += (pz[ai]-pz[bi])*(px[ai]+px[bi]);
+      z += (px[ai]-px[bi])*(py[ai]+py[bi]);
+    }
+    return { x,y,z };
+  }
+  function dominantAxis(n){
+    const ax=Math.abs(n.x), ay=Math.abs(n.y), az=Math.abs(n.z);
+    if(ax>=ay && ax>=az) return 'x';
+    if(ay>=ax && ay>=az) return 'y';
+    return 'z';
+  }
+  // Triangulate one face into `out` (positions) and `colOut` (vertex colours).
+  // Faces whose normal is near-vertical are painted as roofs, the rest as walls.
+  // `wall` and `roof` are [r,g,b] arrays in 0..1.
+  function triangulateFace(face, out, colOut, wall, roof){
+    const rings = face.filter(r=>Array.isArray(r) && r.length>=3);
+    if(!rings.length) return false;
+    const nrm = newellNormal(rings[0]);
+    const ax = dominantAxis(nrm);
+    const isRoof = ax==='y';               // near-horizontal face
+    const col = isRoof ? roof : wall;
+    const pts = [];      // [x,y,z] flattened
+    const flat = [];     // projection for earcut
+    const holes = [];
+    for(let r=0;r<rings.length;r++){
+      const ring = rings[r];
+      if(r>0) holes.push(flat.length/2);
+      for(const vi of ring){
+        pts.push(px[vi], py[vi], pz[vi]);
+        if(ax==='x') flat.push(py[vi], pz[vi]);
+        else if(ax==='y') flat.push(px[vi], pz[vi]);
+        else flat.push(px[vi], py[vi]);
+      }
+    }
+    const tris = earcut(flat, holes.length?holes:null, 2);
+    for(let i=0;i<tris.length;i+=3){
+      for(let t=0;t<3;t++){
+        const k = tris[i+t]*3;
+        out.push(pts[k], pts[k+1], pts[k+2]);
+        colOut.push(col[0], col[1], col[2]);
+      }
+    }
+    return true;
+  }
+
+  // ---- px/py/pz are set per dataset inside buildCity ----
+  let px=null, py=null, pz=null;
+
+  /* ============================ 7. BUILD FROM CITYJSON ============================ */
+  function buildCity(data, name){
+    const t = data.transform || { scale:[1,1,1], translate:[0,0,0] };
+    const vertices = data.vertices;
+    const cityObjects = data.CityObjects;
+    const entries = Object.entries(cityObjects);
+    clearScene();
+
+    // Pre-transform into local meter coordinates (identity RD), remembering bounds.
+    px = new Float32Array(vertices.length);
+    py = new Float32Array(vertices.length);
+    pz = new Float32Array(vertices.length);
+    let minE=Infinity,maxE=-Infinity,minN=Infinity,maxN=-Infinity,minH=Infinity,maxH=-Infinity;
+    for(let i=0;i<vertices.length;i++){
+      const v=vertices[i];
+      const E=v[0]*t.scale[0]+t.translate[0];   // RD easting
+      const N=v[1]*t.scale[1]+t.translate[1];   // RD northing
+      const H=v[2]*t.scale[2]+t.translate[2];   // elevation (m)
+      px[i]=E; pz[i]=-N; py[i]=H;               // world: x=east, z=-north, y=up
+      if(E<minE)minE=E; if(E>maxE)maxE=E;
+      if(N<minN)minN=N; if(N>maxN)maxN=N;
+      if(H<minH)minH=H; if(H>maxH)maxH=H;
+    }
+    // recenter to origin: subtract tile centre, put lowest elevation at ground
+    const cE=(minE+maxE)/2, cN=(minN+maxN)/2, ground=Math.max(0,minH-1);
+    for(let i=0;i<vertices.length;i++){
+      px[i]-=cE; pz[i]+=cN; py[i]-=ground;      // pz = -(N-cN) == -N+cN
+    }
+
+    // parent building lookup (attributes live on the Building / Pand)
+    const parentOf = new Map();
+    entries.forEach(([id,o])=>{ if(Array.isArray(o.children)) o.children.forEach(c=>parentOf.set(c,{id,obj:o})); });
+
+    // pick highest-LOD Solid (or Composite/MultiSurface fallback)
+    function bestGeometry(geoArr){
+      if(!Array.isArray(geoArr)) return null;
+      let best=null, bl=-1;
+      for(const g of geoArr){
+        if(!g || !Array.isArray(g.boundaries) || !g.boundaries.length) continue;
+        const type=g.type;
+        if(type!=='Solid' && type!=='MultiSurface' && type!=='CompositeSurface' && type!=='CompositeSolid') continue;
+        const lod=parseFloat(g.lod|| (type==='Solid'?'1.2':'0'));
+        if(lod>bl){ bl=lod; best=g; }
+      }
+      return best;
+    }
+    function collectFaces(g){
+      const faces=[];
+      if(g.type==='Solid'){
+        // boundaries = [ shell ] ; shell = face[]
+        for(const shell of g.boundaries){ if(Array.isArray(shell)) for(const f of shell) if(Array.isArray(f)) faces.push(f); }
+      }else if(g.type==='CompositeSolid'){
+        for(const solid of g.boundaries){ for(const shell of (Array.isArray(solid)?solid:[solid])) if(Array.isArray(shell)) for(const f of shell) if(Array.isArray(f)) faces.push(f); }
+      }else{
+        for(const f of g.boundaries) if(Array.isArray(f)) faces.push(f); // MultiSurface / CompositeSurface
+      }
+      return faces;
+    }
+
+    // Build render units: BuildingParts always shown; standalone Buildings (no parts) shown directly.
+    const units=[];
+    const seenPart=new Set();
+    entries.forEach(([id,o])=>{
+      if(o.type==='BuildingPart'){ seenPart.add(id); units.push({ part:id, building: parentOf.get(id)||null }); }
+    });
+    entries.forEach(([id,o])=>{
+      if(o.type!=='Building') return;
+      const hasParts = Array.isArray(o.children) && o.children.some(c=>seenPart.has(c));
+      if(!hasParts) units.push({ part:id, building:{ id, obj:o } });
+    });
+
+    // Build one mesh per unit in time-sliced batches.
+    let idx=0;
+    const extent = { min:new THREE.Vector3(Infinity,Infinity,Infinity), max:new THREE.Vector3(-Infinity,-Infinity,-Infinity) };
+
+    function buildOne(unit){
+      // The 3D solid lives on the unit object itself (the BuildingPart).
+      // The parent Building only carries a flat lod-0 footprint + metadata.
+      const source = cityObjects[unit.part];
+      const g = bestGeometry(source && source.geometry ? source.geometry : null);
+      if(!g) return;
+      const faces = collectFaces(g);
+      const pos=[], col=[];
+      let mnY=Infinity, mxY=-Infinity;
+      // stable pseudo-random facade palette per building (consistent across reloads)
+      let h=2166136261;
+      const seedStr = unit.part + (unit.building?unit.building.id:'');
+      for(let i=0;i<seedStr.length;i++){ h^=seedStr.charCodeAt(i); h=Math.imul(h,16777619); }
+      h = Math.abs(h);
+      const pal = PALETTES[h % PALETTES.length];
+      const jitter = 0.93 + (h%70)/70 * 0.07;
+      const pick = arr => {
+        const c=new THREE.Color(arr[h % arr.length]); c.multiplyScalar(jitter); return [c.r,c.g,c.b];
+      };
+      const wallCol = pick(pal.wall), roofCol = pick(pal.roof);
+      for(const face of faces){
+        // track vertical extent
+        for(const ring of face) if(Array.isArray(ring)) for(const vi of ring){
+          if(py[vi]<mnY)mnY=py[vi]; if(py[vi]>mxY)mxY=py[vi];
+        }
+        triangulateFace(face, pos, col, wallCol, roofCol);
+      }
+      if(pos.length<9 || !isFinite(mnY)) return;
+      const geometry=new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(col,3));
+      geometry.computeVertexNormals();
+
+      const mesh=new THREE.Mesh(geometry, buildingMat);
+      mesh.frustumCulled=true;
+      scene.add(mesh);
+      buildingMeshes.push(mesh);
+
+      geometry.computeBoundingBox();
+      extent.min.min(geometry.boundingBox.min);
+      extent.max.max(geometry.boundingBox.max);
+
+      // Metadata — building attrs if we have a parent Pand, else the object's own
+      const attrs = unit.building ? (unit.building.obj.attributes||{}) : (source.attributes||{});
+      const approved = (Number.isInteger(Number(attrs.b3_bouwlagen)) && Number(attrs.b3_bouwlagen)>0) ? Number(attrs.b3_bouwlagen) : null;
+      const measured = mxY-mnY;
+      const est = Math.max(1, Math.round(measured/FLOOR_M));
+      const buildingId = unit.building ? unit.building.id : unit.part;
+      const area = Number(attrs.b3_opp_grond)>0 ? Number(attrs.b3_opp_grond) : null;
+
+      mesh.userData = {
+        key: buildingId,               // assignments grouped per building/pand
+        partId: unit.part,
+        buildingId,
+        attrs,
+        approved,
+        est,
+        measured,
+        minY: mnY, maxY: mxY,
+        area,
+        year: attrs.oorspronkelijkbouwjaar || null,
+        status: attrs.status || null,
+        floorCount: approved || est,   // editable default
+        floors: null                   // floorsData set on selection/export
+      };
+    }
+
+    function step(){
+      const t0=performance.now();
+      while(idx<units.length && performance.now()-t0<14){ buildOne(units[idx]); idx++; }
+      const frac=units.length? idx/units.length : 1;
+      setLoading(true, 0.15+0.85*frac, 'Building ' + Math.min(idx,units.length) + ' of ' + units.length + ' volumes…');
+      if(idx<units.length){ requestAnimationFrame(step); }
+      else{ finish(); }
+    }
+    function finish(){
+      setLoading(false,1,'');
+      const total = buildingMeshes.length;
+      datasetSelect.value = name;
+      if(total===0){ toast('No renderable buildings found in this file.'); return; }
+      const cx2=(extent.min.x+extent.max.x)/2, cz2=(extent.min.z+extent.max.z)/2;
+      const radius = Math.max(1, extent.max.distanceTo(extent.min)/2);
+      const target=new THREE.Vector3(cx2, 0, cz2);
+      sceneCenter=target.clone();
+      sceneRadius=radius;
+      viewDist=radius*2.0+60;
+      updateGrid(viewDist);
+      setAtmosphere(radius);
+      camera.near=Math.max(0.1, viewDist/4000);
+      camera.far=Math.max(30000, radius*120);
+      camera.updateProjectionMatrix();
+      obliqueView();
+      toast(total + ' buildings rendered · click any building to assign floors');
+    }
+    setLoading(true,0.05,'Parsing geometry…');
+    setTimeout(step, 30);
+  }
+
+  /* ============================ 8. SELECTION & OVERLAYS ============================ */
+  const raycaster=new THREE.Raycaster();
+  const pointer=new THREE.Vector2();
+  let downPos=null;
+
+  renderer.domElement.addEventListener('pointerdown', e=>{ downPos={x:e.clientX,y:e.clientY}; });
+  renderer.domElement.addEventListener('pointerup', e=>{
+    if(!downPos) return;
+    const moved=Math.hypot(e.clientX-downPos.x, e.clientY-downPos.y);
+    downPos=null;
+    if(moved>6) return; // treat as orbit drag
+    const rect=renderer.domElement.getBoundingClientRect();
+    pointer.x=((e.clientX-rect.left)/rect.width)*2-1;
+    pointer.y=-((e.clientY-rect.top)/rect.height)*2+1;
+    raycaster.setFromCamera(pointer,camera);
+    const hits=raycaster.intersectObjects(buildingMeshes,false);
+    if(!hits.length) return;
+    selectBuilding(hits[0].object);
+  });
+
+  function selectBuilding(mesh){
+    if(selectedMesh && selectedMesh!==mesh) selectedMesh.material=buildingMat;
+    selectedMesh=mesh;
+    mesh.material=highlightMat;
+    const d=mesh.userData;
+    // ensure floorsData exists
+    if(!d.floors || d.floors.count!==d.floorCount) initFloors(d);
+    // card
+    $('card-id').textContent=d.buildingId;
+    $('card-height').innerHTML=(d.measured||0).toFixed(1)+' <small>m</small>';
+    $('card-area').textContent=d.area!=null ? Math.round(d.area).toLocaleString()+' m²' : '—';
+    $('card-approved').textContent=d.approved!=null ? d.approved : '—';
+    $('card-est').innerHTML=d.est+' <small>(≈ '+(d.measured||0).toFixed(1)+' m)</small>';
+    $('card-chip').innerHTML=chipHtml(d);
+    $('floor-count').value=d.floorCount;
+    renderFloorEditor();
+    drawDividers();
+    $('card').style.display='block';
+    // focus
+    const g=mesh.geometry;
+    if(g.boundingSphere) g.computeBoundingSphere();
+    const c=g.boundingSphere.center.clone().add(mesh.position);
+    focusTarget=new THREE.Vector3(c.x, (d.minY+d.maxY)/2, c.z);
+  }
+
+  function chipHtml(d){
+    if(d.approved==null) return '<div class="chip muted">No approved floor count in the source — set floors manually</div>';
+    if(d.est>d.approved) return '<div class="chip warn">⚠ Measured height (~'+d.est+' floors) exceeds the '+d.approved+' approved — review for possible extra floors</div>';
+    return '<div class="chip ok">✓ Height matches the '+d.approved+' approved floors</div>';
+  }
+
+  function drawDividers(){
+    removeOverlays();
+    if(!selectedMesh) return;
+    const d=selectedMesh.userData;
+    const count=Math.max(1,d.floorCount);
+    const g=selectedMesh.geometry;
+    if(!g.boundingBox) g.computeBoundingBox();
+    const bb=g.boundingBox;
+    dividerGroup=new THREE.Group();
+    const minY=d.minY, maxY=d.maxY;
+    for(let k=1;k<count;k++){
+      const y=minY+(maxY-minY)*(k/count);
+      const h=maxY-minY;
+      const inset=Math.max(0.02,h/300);
+      const pts=[ new THREE.Vector3(bb.min.x+inset,y,bb.min.z+inset),
+                  new THREE.Vector3(bb.max.x-inset,y,bb.min.z+inset),
+                  new THREE.Vector3(bb.max.x-inset,y,bb.max.z-inset),
+                  new THREE.Vector3(bb.min.x+inset,y,bb.max.z-inset),
+                  new THREE.Vector3(bb.min.x+inset,y,bb.min.z+inset) ];
+      const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), dividerMat);
+      dividerGroup.add(line);
+    }
+    scene.add(dividerGroup);
+  }
+
+  /* ============================ 9. FLOOR EDITOR ============================ */
+  function initFloors(d){
+    const floors=[];
+    for(let f=1;f<=d.floorCount;f++){
+      floors.push({ floor:f, units:[ { side:'N', number:'', latitude:'', longitude:'' } ] });
+    }
+    d.floors={ count:d.floorCount, floors };
+  }
+  function shortBase(key){
+    const m=String(key).match(/(\d{4,})$/);
+    return m ? m[1] : key;
+  }
+  function baseCode(){
+    if(!selectedMesh) return '';
+    const d=selectedMesh.userData;
+    return (d.buildingId||d.key||'B').replace(/[^0-9]/g,'').slice(-8) || 'B';
+  }
+
+  function renderFloorEditor(){
+    const host=$('floor-editor');
+    const d=selectedMesh.userData;
+    const rec=d.floors;
+    const base=baseCode();
+    host.innerHTML='';
+    rec.floors.forEach((fl,fi)=>{
+      const block=document.createElement('div');
+      block.className='floor-block'+(fi===0?' open':'');
+      block.dataset.floor=fi;
+      const head=document.createElement('div');
+      head.className='floor-head';
+      head.innerHTML='<span class="fname">'+String(fi+1).padStart(2,'0')+'</span>'+
+        '<span class="base-code" title="Floor unit code base">'+base+' · F'+String(fi+1).padStart(2,'0')+'</span>'+
+        '<button class="icon-btn" data-act="toggle">'+ (fi===0?'collapse':'expand') +'</button>'+
+        '<button class="icon-btn" data-act="add" title="Add unit/side on this floor">+ unit</button>';
+      const units=document.createElement('div');
+      units.className='floor-units';
+      fl.units.forEach((u,ui)=>{ units.appendChild(unitRow(fi,ui,u)); });
+      const hint=document.createElement('div');
+      hint.className='unit-hint';
+      hint.innerHTML='Unit code example: <code>'+base+' · F'+String(fi+1).padStart(2,'0')+' · '+ (fl.units[0].side||'N') + (fl.units[0].number||'1') +'</code>';
+      block.appendChild(head);
+      block.appendChild(units);
+      block.appendChild(hint);
+      host.appendChild(block);
+    });
+  }
+  function unitRow(fi,ui,u){
+    const row=document.createElement('div');
+    row.className='unit-row';
+    row.dataset.u=ui;
+    const sides=['N','E','S','W'];
+    const opts=sides.map(s=>'<option '+(u.side===s?'selected':'')+'>'+s+'</option>').join('');
+    row.innerHTML='<select data-field="side">'+opts+'</select>'+
+      '<input data-field="number" placeholder="Unit" value="'+(u.number||'')+'">'+
+      '<input data-field="latitude" placeholder="Latitude" value="'+(u.latitude||'')+'">'+
+      '<input data-field="longitude" placeholder="Longitude" value="'+(u.longitude||'')+'">'+
+      '<button class="del" data-act="del" title="Remove">✕</button>';
+    return row;
+  }
+
+  $('floor-editor').addEventListener('click', e=>{
+    if(!selectedMesh) return;
+    const btn=e.target.closest('[data-act]');
+    if(!btn) return;
+    const block=btn.closest('.floor-block');
+    const fi=Number(block.dataset.floor);
+    const act=btn.dataset.act;
+    const rec=selectedMesh.userData.floors;
+    if(act==='toggle'){ block.classList.toggle('open'); btn.textContent=block.classList.contains('open')?'collapse':'expand'; }
+    else if(act==='add'){ rec.floors[fi].units.push({ side:'N', number:'', latitude:'', longitude:'' }); renderFloorEditor(); }
+    else if(act==='del'){
+      const row=btn.closest('.unit-row');
+      const ui=Number(row.dataset.u);
+      rec.floors[fi].units.splice(ui,1);
+      if(!rec.floors[fi].units.length) rec.floors[fi].units.push({ side:'N', number:'', latitude:'', longitude:'' });
+      renderFloorEditor();
+    }
+  });
+
+  $('floor-editor').addEventListener('change', e=>{
+    const el=e.target.closest('[data-field]');
+    if(!el||!selectedMesh) return;
+    const row=el.closest('.unit-row'); if(!row) return;
+    const block=row.closest('.floor-block'); if(!block) return;
+    const fi=Number(block.dataset.floor), ui=Number(row.dataset.u);
+    const field=el.dataset.field;
+    const unit=selectedMesh.userData.floors.floors[fi].units[ui];
+    unit[field]=el.value;
+    // refresh just this floor's example code (no full re-render, keeps focus)
+    const hint=block.querySelector('.unit-hint code');
+    if(hint){
+      const first=selectedMesh.userData.floors.floors[fi].units[0];
+      hint.textContent=baseCode()+' · F'+String(fi+1).padStart(2,'0')+' · '+(first.side||'N')+(first.number||'1');
+    }
+  });
+
+  $('apply-floors').addEventListener('click', ()=>{
+    if(!selectedMesh) return;
+    const d=selectedMesh.userData;
+    let count=Math.max(1, Math.min(120, parseInt($('floor-count').value,10)||1));
+    d.floorCount=count;
+    initFloors(d);
+    renderFloorEditor();
+    drawDividers();
+  });
+
+  $('card-close').addEventListener('click', ()=>{
+    if(selectedMesh){ selectedMesh.material=buildingMat; selectedMesh=null; }
+    removeOverlays();
+    $('card').style.display='none';
+  });
+
+  /* ============================ 10. EXPORT ============================ */
+  $('download-data').addEventListener('click', ()=>{
+    const buildings=[];
+    for(const m of buildingMeshes){
+      const d=m.userData;
+      if(!d) continue;
+      if(!d.floors || d.floors.count!==d.floorCount) initFloors(d);
+      const b={
+        buildingId:d.buildingId,
+        partId:d.partId,
+        measuredHeightM:+(d.measured||0).toFixed(2),
+        approvedFloors:d.approved,
+        floorCount:d.floorCount,
+        floors:d.floors.floors.map(fl=>({ floor:fl.floor, units:fl.units.map(u=>({ side:u.side, number:u.number, latitude:u.latitude, longitude:u.longitude })) }))
+      };
+      buildings.push(b);
+    }
+    const payload={ dataset: datasetSelect.value, exportedAt:new Date().toISOString(), buildings };
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='3d-building-assignments.json';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    toast('Exported '+buildings.length+' building records');
+  });
+
+  /* ============================ 11. EVENTS ============================ */
+  datasetSelect.addEventListener('change', ()=> loadDataset(datasetSelect.value));
+  $('btn-oblique').addEventListener('click', ()=>{ obliqueView(); });
+  $('btn-top').addEventListener('click', ()=>{ topView(); });
+  $('file-input').addEventListener('change', e=>{
+    const file=e.target.files[0]; if(!file) return;
+    const reader=new FileReader();
+    setLoading(true,0.02,'Reading '+file.name+' …');
+    reader.onload=ev=>{
+      try{ const json=JSON.parse(ev.target.result); buildCity(json,file.name); }
+      catch(err){ setLoading(false,0,''); toast('Error parsing file: '+err.message); }
+    };
+    reader.onerror=()=>{ setLoading(false,0,''); toast('Could not read file.'); };
+    reader.readAsText(file);
+  });
+
+  window.addEventListener('resize', ()=>{
+    camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth,innerHeight);
+  });
+
+  /* ============================ 12. LOOP ============================ */
+  function animate(){
+    requestAnimationFrame(animate);
+    if(focusTarget && controls.target.distanceTo(focusTarget)>0.01) controls.target.lerp(focusTarget,0.12);
+    controls.update();
+    renderer.render(scene,camera);
+  }
+  animate();
+
+  /* initial load */
+  loadDataset(DATASETS[0].file);
+  </script>
+</body>
+</html>
