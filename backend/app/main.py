@@ -21,10 +21,8 @@ settings = get_settings()
 def _bootstrap() -> None:
     """Create schema and seed demo data (dev only, idempotent)."""
     create_schema()
-    if settings.app_env == "production":
-        logger.info("production mode: skipping auto-seed")
-        return
     if not settings.seed_demo_data:
+        logger.info("demo seed disabled")
         return
     db = SessionLocal()
     try:

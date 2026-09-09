@@ -26,6 +26,31 @@ docker compose up --build
 
 `db` (postgis) + `api` + `web` (nginx SPA). Frontend proxies `/api` → `api:8000`.
 
+## Render (recommended hosted demo)
+
+The repository includes `render.yaml` for an API service, PostgreSQL database,
+and static frontend. In Render:
+
+1. Open **New → Blueprint**, connect the GitHub repository, and apply the
+  blueprint. Render creates `3dulpin-api`, `3dulpin-web`, and `3dulpin-db`.
+2. On `3dulpin-api`, set `CORS_ORIGINS` to the frontend URL after Render
+  creates it, for example `https://3dulpin-web.onrender.com`.
+3. On `3dulpin-web`, set `VITE_API_BASE` to the API URL plus `/api/v1`, for
+  example `https://3dulpin-api.onrender.com/api/v1`, then redeploy the web
+  service. Vite variables are embedded during the build, so this step is
+  required after changing the value.
+4. Check `https://3dulpin-api.onrender.com/health` and
+  `/health/db`. The API creates its schema and, because the Blueprint sets
+  `SEED_DEMO_DATA=true`, seeds the synthetic Bengaluru demo dataset on its
+  first startup.
+5. Open the frontend URL and use the development-only demo credentials from
+  the README. Change or disable demo seeding before using real data.
+
+Render free services may sleep when idle. The PostgreSQL service must be
+available while the API starts. The application uses SQLAlchemy text/metrics
+storage and therefore works with Render PostgreSQL; native PostGIS columns can
+be added later using the Alembic scaffold.
+
 ## Production
 
 - **Frontend on Vercel**: import this GitHub repository, set the Vercel project

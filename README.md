@@ -300,6 +300,10 @@ See `docs/SECURITY.md`.
 - **Backend**: run `uvicorn app.main:app --host 0.0.0.0 --port $PORT` on
   Render/Railway/Fly.io, or deploy the `backend/` Docker image. Add managed
   PostgreSQL + PostGIS and set `CORS_ORIGINS` to the Vercel URL.
+- **Render Blueprint**: use `render.yaml` with **New → Blueprint** to create
+  the API, PostgreSQL database, and static frontend together. Set the generated
+  API URL in frontend `VITE_API_BASE`, then set the generated frontend URL in
+  API `CORS_ORIGINS` and redeploy.
 - **Frontend elsewhere**: `npm run build` → static `dist/` (Netlify/nginx/Docker).
 
 ---

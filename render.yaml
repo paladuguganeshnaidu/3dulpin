@@ -1,0 +1,44 @@
+# Render Blueprint for India 3D ULPIN.
+# Deploy from the repository root with: New > Blueprint > select this repo.
+# After the first deploy, set VITE_API_BASE and CORS_ORIGINS to the generated URLs.
+services:
+  - type: web
+    name: 3dulpin-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: 3dulpin-db
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SEED_DEMO_DATA
+        value: "true"
+      - key: SEED_DEMO_USERS
+        value: "true"
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: anthropic/claude-3.5-sonnet
+
+  - type: web
+    name: 3dulpin-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci --no-audit --no-fund && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE
+        sync: false
+
+databases:
+  - name: 3dulpin-db
+    plan: free
