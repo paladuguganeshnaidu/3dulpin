@@ -361,7 +361,33 @@ def auto_place_building(
             confidence=candidate["confidence"],
             actor_id=user.id,
         )
+
+        # auto-generate floors in the same transaction as the building
+        created_floors: list[Property] = []
+        bfp = _json.loads(building.footprint_geojson)
+        for i in range(floors):
+            z0 = round(i * floor_height, 3)
+            z1 = round(z0 + floor_height, 3)
+            created_floors.append(
+                create_property(
+                    db,
+                    ref_key=f"{ref_key}-F{i + 1:02d}",
+                    property_type=PropertyType.FLOOR,
+                    footprint_data=bfp,
+                    zmin=z0,
+                    zmax=z1,
+                    parcel=parcel,
+                    parent=building,
+                    name=f"{name} Floor {i + 1}",
+                    status=PropertyStatus.DRAFT,
+                    source_type=SourceType.SURVEY_UPLOADED,
+                    source_name=user.email,
+                    actor_id=user.id,
+                )
+            )
     except IntegrityError:
+        # SQLite/Postgres can race between the existence check and insert.
+        # Roll back the failed transaction, then return the committed record.
         db.rollback()
         building = db.execute(select(Property).where(Property.ref_key == ref_key)).scalar_one_or_none()
         if building is None:
@@ -380,31 +406,8 @@ def auto_place_building(
             "created": False,
         }
     except Exception as exc:
+        db.rollback()
         raise HTTPException(422, str(exc))
-
-    # auto-generate floors
-    created_floors: list[Property] = []
-    bfp = _json.loads(building.footprint_geojson)
-    for i in range(floors):
-        z0 = round(i * floor_height, 3)
-        z1 = round(z0 + floor_height, 3)
-        created_floors.append(
-            create_property(
-                db,
-                ref_key=f"{ref_key}-F{i + 1:02d}",
-                property_type=PropertyType.FLOOR,
-                footprint_data=bfp,
-                zmin=z0,
-                zmax=z1,
-                parcel=parcel,
-                parent=building,
-                name=f"{name} Floor {i + 1}",
-                status=PropertyStatus.DRAFT,
-                source_type=SourceType.SURVEY_UPLOADED,
-                source_name=user.email,
-                actor_id=user.id,
-            )
-        )
 
     db.commit()
     result = run_validation(db, parcel_ref=parcel.ref_id, persist=True)

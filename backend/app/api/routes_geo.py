@@ -174,6 +174,12 @@ def search(
     needle = f"%{q.strip()}%"
     results: list[dict[str, Any]] = []
 
+    # Search named map regions/campuses before database records so queries
+    # such as "Nagarjuna College" fly to the real map context.
+    for region in REGIONS:
+        if q.strip().lower() in region["name"].lower():
+            results.append({"kind": "region", "item": region})
+
     # ULPIN exact match
     ulpin_rows = db.execute(
         select(Property).where(Property.ulpin == q.strip().upper())

@@ -118,3 +118,12 @@ def test_demo_smoke_flow(client, admin_headers):
     # persistence: admin stats reflect stored counts
     stats = client.get("/api/v1/admin/stats", headers=h).json()
     assert stats["parcels"] >= 50 and stats["properties"] >= 300
+
+
+def test_search_nagarjuna_college_returns_region(client, admin_headers):
+    response = client.get("/api/v1/search?q=Nagarjuna%20College", headers=admin_headers)
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert results
+    assert results[0]["kind"] == "region"
+    assert results[0]["item"]["id"] == "nagarjuna-campus"

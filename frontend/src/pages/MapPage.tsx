@@ -201,7 +201,10 @@ export default function MapPage() {
         return;
       }
       const first = res.results[0];
-      if (first.kind === "parcel") {
+      if (first.kind === "region") {
+        setRegion(first.item as Region);
+        setSelected(null);
+      } else if (first.kind === "parcel") {
         const par = first.item as Parcel;
         setRegion({
           id: par.id,
@@ -220,6 +223,19 @@ export default function MapPage() {
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Search failed");
     }
+  }
+
+  function viewFull3d(prop: Property) {
+    setLayers((s) => ({ ...s, buildings: true, properties: true }));
+    setRegion({
+      id: `property-view-${prop.id}`,
+      name: prop.name || prop.id,
+      kind: "pilot",
+      center: prop.centroid,
+      description: "Focused 3D building view",
+    });
+    setExplode(false);
+    setRevision((n) => n + 1);
   }
 
   const selP = selected?.kind === "property" ? (selected.item as Property) : null;
@@ -355,6 +371,9 @@ export default function MapPage() {
             </div>
             {selP && selP.property_type === "building" && (
               <div className="mt-3 flex flex-col gap-2">
+                <button className="btn-primary !py-1 text-xs" onClick={() => viewFull3d(selP)}>
+                  View full 3D block
+                </button>
                 <button className="btn-teal !py-1 text-xs" onClick={() => setExplode((x) => !x)}>
                   {explode ? "Collapse floors" : "Explode floors"}
                 </button>
