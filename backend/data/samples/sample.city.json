@@ -1,0 +1,60 @@
+{
+ "type": "CityJSON",
+ "version": "2.0",
+ "metadata": {
+  "title": "Sample building (synthetic)",
+  "epsg": 4326,
+  "notice": "Demonstration dataset \u2014 not an official land record."
+ },
+ "transform": null,
+ "vertices": [
+  [
+   77.6400986,
+   12.9097192,
+   0.0
+  ],
+  [
+   77.6403014,
+   12.9097192,
+   0.0
+  ],
+  [
+   77.6403014,
+   12.9098808,
+   0.0
+  ],
+  [
+   77.6400986,
+   12.9098808,
+   0.0
+  ]
+ ],
+ "CityObjects": {
+  "SAMPLE-BLD-1": {
+   "type": "Building",
+   "attributes": {
+    "measuredHeight": 12.0,
+    "name": "Sample Building 1 (CityJSON)"
+   },
+   "geometry": [
+    {
+     "type": "Solid",
+     "lod": "2.2",
+     "boundaries": [
+      [
+       [
+        [
+         0,
+         1,
+         2,
+         3,
+         0
+        ]
+       ]
+      ]
+     ]
+    }
+   ]
+  }
+ }
+}

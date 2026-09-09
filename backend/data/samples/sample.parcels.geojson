@@ -1,0 +1,195 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "P00001",
+    "type": "parcel",
+    "state_code": "KA",
+    "district_code": "BLR",
+    "locality": "Bengaluru Pilot Zone (Synthetic)",
+    "source_type": "synthetic_demo"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       77.6384489,
+       12.9089376
+      ],
+      [
+       77.6387254,
+       12.9089376
+      ],
+      [
+       77.6387254,
+       12.9091712
+      ],
+      [
+       77.6384489,
+       12.9091712
+      ],
+      [
+       77.6384489,
+       12.9089376
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "P00002",
+    "type": "parcel",
+    "state_code": "KA",
+    "district_code": "BLR",
+    "locality": "Bengaluru Pilot Zone (Synthetic)",
+    "source_type": "synthetic_demo"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       77.6387992,
+       12.9089376
+      ],
+      [
+       77.6390756,
+       12.9089376
+      ],
+      [
+       77.6390756,
+       12.9091712
+      ],
+      [
+       77.6387992,
+       12.9091712
+      ],
+      [
+       77.6387992,
+       12.9089376
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "P00003",
+    "type": "parcel",
+    "state_code": "KA",
+    "district_code": "BLR",
+    "locality": "Bengaluru Pilot Zone (Synthetic)",
+    "source_type": "synthetic_demo"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       77.6391494,
+       12.9089376
+      ],
+      [
+       77.6394259,
+       12.9089376
+      ],
+      [
+       77.6394259,
+       12.9091712
+      ],
+      [
+       77.6391494,
+       12.9091712
+      ],
+      [
+       77.6391494,
+       12.9089376
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "P00004",
+    "type": "parcel",
+    "state_code": "KA",
+    "district_code": "BLR",
+    "locality": "Bengaluru Pilot Zone (Synthetic)",
+    "source_type": "synthetic_demo"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       77.6394996,
+       12.9089376
+      ],
+      [
+       77.6397761,
+       12.9089376
+      ],
+      [
+       77.6397761,
+       12.9091712
+      ],
+      [
+       77.6394996,
+       12.9091712
+      ],
+      [
+       77.6394996,
+       12.9089376
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "P00005",
+    "type": "parcel",
+    "state_code": "KA",
+    "district_code": "BLR",
+    "locality": "Bengaluru Pilot Zone (Synthetic)",
+    "source_type": "synthetic_demo"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       77.6398498,
+       12.9089376
+      ],
+      [
+       77.6401263,
+       12.9089376
+      ],
+      [
+       77.6401263,
+       12.9091712
+      ],
+      [
+       77.6398498,
+       12.9091712
+      ],
+      [
+       77.6398498,
+       12.9089376
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}
