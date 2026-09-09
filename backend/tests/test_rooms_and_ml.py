@@ -130,6 +130,38 @@ def test_auto_place_building_from_parcel(client, surveyor_headers):
     ring = body["candidate"]["footprint_geojson"]["coordinates"][0]
     assert len(ring) == 5
 
+    repeated = client.post(
+        "/api/v1/workflow/buildings/auto-place",
+        headers=surveyor_headers,
+        json={"parcel_id": par, "floors": 2, "floor_height": 3},
+    )
+    assert repeated.status_code == 201, repeated.text
+    assert repeated.json()["created"] is False
+    assert repeated.json()["building"]["id"] == body["building"]["id"]
+
+
+def test_repeated_auto_place_is_idempotent(client, surveyor_headers):
+    """Repeated clicks do not raise UNIQUE constraint errors."""
+    parcels = client.get("/api/v1/parcels", headers=surveyor_headers).json()
+    parcel_id = parcels["items"][1]["id"]
+    payload = {"parcel_id": parcel_id, "floors": 2, "floor_height": 3}
+
+    first = client.post(
+        "/api/v1/workflow/buildings/auto-place",
+        headers=surveyor_headers,
+        json=payload,
+    )
+    second = client.post(
+        "/api/v1/workflow/buildings/auto-place",
+        headers=surveyor_headers,
+        json=payload,
+    )
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    assert first.json()["building"]["id"] == second.json()["building"]["id"]
+    assert second.json()["created"] is False
+    assert len(second.json()["floors_created"]) == 2
+
 
 def test_auto_place_by_right_click_center(client, surveyor_headers):
     """Right-click ML block mapping creates a parcel when none is near."""

@@ -1,8 +1,11 @@
 """Workflow routes: validation, surveyor workflow, admin review, audit."""
 from __future__ import annotations
 
+import hashlib
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..core.enums import AuditAction, PropertyStatus, PropertyType, Role, SourceType
@@ -190,7 +193,8 @@ def create_surveyor_property(
     source_type = SourceType.AI_DERIVED if assisted else SourceType.SURVEY_UPLOADED
     status = PropertyStatus.PENDING_VERIFICATION if assisted else PropertyStatus.DRAFT
 
-    ref_key = f"usr-{user.id}-{ptype.value}-{abs(hash(str(payload))) % 10**7}"
+    payload_key = hashlib.sha256(str(sorted(payload.items())).encode("utf-8")).hexdigest()[:12]
+    ref_key = f"usr-{user.id}-{ptype.value}-{payload_key}"
     try:
         prop = create_property(
             db,
@@ -210,6 +214,11 @@ def create_surveyor_property(
             confidence=payload.get("confidence") if assisted else None,
             actor_id=user.id,
         )
+    except IntegrityError:
+        db.rollback()
+        prop = db.execute(select(Property).where(Property.ref_key == ref_key)).scalar_one_or_none()
+        if prop is None:
+            raise HTTPException(409, "Property was created concurrently; retry the request.")
     except Exception as exc:
         raise HTTPException(422, str(exc))
 
@@ -311,7 +320,28 @@ def auto_place_building(
 
     height = round(floors * floor_height, 3)
     name = payload.get("name") or f"ML Block on {parcel_ref}"
-    ref_key = f"usr-{user.id}-auto-{parcel_ref}-{abs(hash((parcel_ref, floors, inset_m))) % 10**6}"
+    placement_key = hashlib.sha256(
+        f"{user.id}|{parcel_ref}|{floors}|{floor_height}|{inset_m}".encode("utf-8")
+    ).hexdigest()[:12]
+    ref_key = f"usr-{user.id}-auto-{parcel_ref}-{placement_key}"
+
+    # Repeated clicks on the same parcel/settings should be safe and return the
+    # existing mapped block instead of violating the unique ref_key constraint.
+    existing = db.execute(select(Property).where(Property.ref_key == ref_key)).scalar_one_or_none()
+    if existing is not None:
+        existing_floors = db.execute(
+            select(Property)
+            .where(Property.parent_id == existing.id, Property.property_type == PropertyType.FLOOR.value)
+            .order_by(Property.id)
+        ).scalars().all()
+        return {
+            "candidate": candidate,
+            "building": property_to_dict(existing),
+            "floors_created": [property_to_dict(f) for f in existing_floors],
+            "validation": {"state": "EXISTING"},
+            "notice": "This block was already mapped; existing data returned.",
+            "created": False,
+        }
 
     try:
         building = create_property(
@@ -331,6 +361,24 @@ def auto_place_building(
             confidence=candidate["confidence"],
             actor_id=user.id,
         )
+    except IntegrityError:
+        db.rollback()
+        building = db.execute(select(Property).where(Property.ref_key == ref_key)).scalar_one_or_none()
+        if building is None:
+            raise HTTPException(409, "Block was created concurrently; retry the request.")
+        existing_floors = db.execute(
+            select(Property)
+            .where(Property.parent_id == building.id, Property.property_type == PropertyType.FLOOR.value)
+            .order_by(Property.id)
+        ).scalars().all()
+        return {
+            "candidate": candidate,
+            "building": property_to_dict(building),
+            "floors_created": [property_to_dict(f) for f in existing_floors],
+            "validation": {"state": "EXISTING"},
+            "notice": "This block was already mapped; existing data returned.",
+            "created": False,
+        }
     except Exception as exc:
         raise HTTPException(422, str(exc))
 

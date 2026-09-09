@@ -7,7 +7,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parents[2]  # backend/
@@ -51,7 +51,10 @@ class Settings(BaseSettings):
     seed_demo_users: bool = True
 
     # LLM assistant (optional)
-    openrouter_api_key: str = ""
+    openrouter_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("OPENROUTER_API_KEY", "OPENROUTER_API"),
+    )
     openrouter_model: str = "anthropic/claude-3.5-sonnet"
 
     # ML (optional)

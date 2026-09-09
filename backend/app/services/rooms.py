@@ -7,6 +7,7 @@ own ownership record(s). Splits are deterministic and preserve provenance.
 from __future__ import annotations
 
 import json
+import hashlib
 from typing import Any
 
 from sqlalchemy import select
@@ -79,7 +80,8 @@ def divide_floor_into_rooms(
         ref_key = f"{floor.ref_key}-R{seq}"
         if catalog.find_property(session, ref_key):
             # avoid collisions on repeated division
-            ref_key = f"{floor.ref_key}-R{seq}-{abs(hash(name)) % 1000}"
+            suffix = hashlib.sha256(name.encode("utf-8")).hexdigest()[:8]
+            ref_key = f"{floor.ref_key}-R{seq}-{suffix}"
         unit = catalog.create_property(
             session,
             ref_key=ref_key,
