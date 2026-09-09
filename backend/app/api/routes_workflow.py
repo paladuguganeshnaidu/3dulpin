@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..core.enums import AuditAction, PropertyStatus, Role
+from ..core.enums import AuditAction, PropertyStatus, PropertyType, Role, SourceType
 from ..db.models import (
     AiPrediction,
     AuditLog,
@@ -214,6 +214,98 @@ def create_surveyor_property(
     if created_floors:
         out["floors_created"] = [property_to_dict(f) for f in created_floors]
     return out
+
+
+@router.post("/workflow/buildings/auto-place", status_code=201)
+def auto_place_building(
+    payload: dict,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(Role.SURVEYOR, Role.ADMIN)),
+):
+    """One-click ML building block placement from a parcel click.
+
+    Fits an orthogonal building block to the parcel edges (edge-fit), creates
+    the building with floors, and marks it AI-derived / pending verification.
+    """
+    import json as _json
+
+    from ..ml.building import regularize_footprint
+
+    parcel_ref = payload.get("parcel_id")
+    parcel = db.execute(select(Parcel).where(Parcel.ref_id == parcel_ref)).scalar_one_or_none()
+    if parcel is None:
+        raise HTTPException(404, f"Parcel '{parcel_ref}' not found.")
+
+    ring = _json.loads(parcel.footprint_geojson)["coordinates"][0]
+    floors = int(payload.get("floors", 4))
+    floor_height = float(payload.get("floor_height", 3.0))
+    inset_m = float(payload.get("inset_m", 0.0))
+
+    try:
+        candidate = regularize_footprint(ring, inset_m=inset_m, align_to_parcel=True)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+    height = round(floors * floor_height, 3)
+    name = payload.get("name") or f"ML Block on {parcel_ref}"
+    ref_key = f"usr-{user.id}-auto-{parcel_ref}-{abs(hash((parcel_ref, floors, inset_m))) % 10**6}"
+
+    try:
+        building = create_property(
+            db,
+            ref_key=ref_key,
+            property_type=PropertyType.BUILDING,
+            footprint_data=candidate["footprint_geojson"],
+            zmin=0.0,
+            zmax=height,
+            parcel=parcel,
+            name=name,
+            status=PropertyStatus.PENDING_VERIFICATION,
+            source_type=SourceType.AI_DERIVED,
+            source_name=user.email,
+            model_name=candidate["model_name"],
+            model_version=candidate["model_version"],
+            confidence=candidate["confidence"],
+            actor_id=user.id,
+        )
+    except Exception as exc:
+        raise HTTPException(422, str(exc))
+
+    # auto-generate floors
+    created_floors: list[Property] = []
+    bfp = _json.loads(building.footprint_geojson)
+    for i in range(floors):
+        z0 = round(i * floor_height, 3)
+        z1 = round(z0 + floor_height, 3)
+        created_floors.append(
+            create_property(
+                db,
+                ref_key=f"{ref_key}-F{i + 1:02d}",
+                property_type=PropertyType.FLOOR,
+                footprint_data=bfp,
+                zmin=z0,
+                zmax=z1,
+                parcel=parcel,
+                parent=building,
+                name=f"{name} Floor {i + 1}",
+                status=PropertyStatus.DRAFT,
+                source_type=SourceType.SURVEY_UPLOADED,
+                source_name=user.email,
+                actor_id=user.id,
+            )
+        )
+
+    db.commit()
+    result = run_validation(db, parcel_ref=parcel.ref_id, persist=True)
+    audit(db, AuditAction.AI_ANALYSIS, user_id=user.id, target_type="property", target_id=building.ref_key,
+          detail={"method": candidate["method"], "confidence": candidate["confidence"]})
+    return {
+        "candidate": candidate,
+        "building": property_to_dict(building),
+        "floors_created": [property_to_dict(f) for f in created_floors],
+        "validation": result["summary"],
+        "notice": "AI-derived block — requires surveyor verification.",
+    }
 
 
 @router.post("/workflow/properties/{ref_key}/verify")

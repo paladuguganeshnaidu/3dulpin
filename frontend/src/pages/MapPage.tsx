@@ -35,6 +35,7 @@ export default function MapPage() {
   const [revision, setRevision] = useState(0);
   const [analysis, setAnalysis] = useState<AiAnalysis | null>(null);
   const [notice, setNotice] = useState("");
+  const [placing, setPlacing] = useState(false);
 
   const conflictIds = useMemo(
     () => new Set(conflicts.flatMap((c) => c.object_ids)),
@@ -132,6 +133,28 @@ export default function MapPage() {
       loadConflicts();
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Analysis failed");
+    }
+  }
+
+  async function autoPlaceBuilding(parcelId: string) {
+    setNotice("");
+    setPlacing(true);
+    try {
+      const res = await api<any>("/workflow/buildings/auto-place", {
+        method: "POST",
+        body: { parcel_id: parcelId },
+      });
+      setNotice(
+        `ML block placed: ${res.building.name} (${Math.round(
+          (res.candidate?.confidence || 0) * 100
+        )}% confidence, ${res.floors_created?.length || 0} floors). Requires verification.`
+      );
+      await load();
+      await loadConflicts();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Block placement failed");
+    } finally {
+      setPlacing(false);
     }
   }
 
@@ -282,6 +305,17 @@ export default function MapPage() {
                   <Field label="State / District" value={`${selPar.state_code} / ${selPar.district_code}`} />
                   <Field label="Area" value={`${fmt(selPar.area_m2)} m²`} />
                   <Field label="Properties" value={selPar.property_count} />
+                  <button
+                    className="btn-teal mt-3 w-full !py-1.5 text-xs"
+                    disabled={placing}
+                    onClick={() => autoPlaceBuilding(selPar.id)}
+                  >
+                    {placing ? "Placing with ML…" : "ML: Create building block"}
+                  </button>
+                  <p className="mt-1 text-[10px] leading-snug text-slate-400">
+                    Fits an AI-derived block to the parcel edges, then stacks
+                    floors. Requires surveyor verification.
+                  </p>
                 </>
               )}
             </div>

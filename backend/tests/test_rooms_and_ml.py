@@ -111,6 +111,26 @@ def test_create_building_auto_generates_floors(client, surveyor_headers):
     assert floors[1]["zmin"] == 3 and floors[2]["zmax"] == 9
 
 
+def test_auto_place_building_from_parcel(client, surveyor_headers):
+    """One-click ML block placement from a parcel."""
+    parcels = client.get("/api/v1/parcels", headers=surveyor_headers).json()
+    par = parcels["items"][0]["id"]
+    r = client.post(
+        "/api/v1/workflow/buildings/auto-place",
+        headers=surveyor_headers,
+        json={"parcel_id": par, "floors": 2, "floor_height": 3},
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["candidate"]["method"] == "orthogonal_snap_regularization"
+    assert body["building"]["source_type"] == "ai_derived"
+    assert body["building"]["status"] == "pending_verification"
+    assert len(body["floors_created"]) == 2
+    # edge-fit: the block should share the parcel border exactly (inset_m=0)
+    ring = body["candidate"]["footprint_geojson"]["coordinates"][0]
+    assert len(ring) == 5
+
+
 # ---- API: divide floor into rooms + owners ----
 def test_divide_floor_and_owner_crud(client, surveyor_headers):
     floors = client.get("/api/v1/properties?property_type=floor&limit=5", headers=surveyor_headers).json()
